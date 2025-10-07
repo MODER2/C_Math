@@ -9,7 +9,7 @@ int main() {
     SetConsoleOutputCP(CP_UTF8); 
     
     //Создаём константу, для хранения размерности системы (5 уравнений = 5 неизвестных)
-    const int N = 5; 
+    const int N = 4; 
     //Создаём константу для хранения точности вычисления
     const double epsilon = 0.00001;
     //Переменная для хранения количества итераций
@@ -36,11 +36,18 @@ int main() {
     } 
     else if (choice == 2) {
         //Загрузка из файла
-        char filename[50];
+        char filename[100];
         printf("Введите имя файла: ");
         scanf("%s", filename);
         
         matrix = matrixReadFile(filename, N, N + 1);
+        
+        //Проверяем, успешно ли загрузилась матрица
+        if (matrix == NULL) {
+            printf("Не удалось загрузить матрицу из файла. Программа завершена.\n");
+            free(result);
+            return 1;  //Выход с ошибкой
+        }
     }
     else {
         printf("Неверный выбор. Программа завершена.\n");
@@ -52,72 +59,64 @@ int main() {
     printf("Ваша расширенная матрица:");
     print_matr(matrix, N, N + 1);
 
-    //Основной цикл программы для метода Гаусса
-    for(int i = 0; i <= (N - 1); i++) {
+    //Основной цикл программы для метода Жордана-Гаусса
+    for(int k = 0; k < N; k++) {  // k - номер текущего шага
 
         //Проверка условия, что элемент диагонали не равен 0
-        if(fabs(matrix[i][i]) < epsilon) {
+        if(fabs(matrix[k][k]) < epsilon) {
 
             //Спускаемся на строку ниже
-            int m = i + 1;
+            int m = k + 1;
 
             //Ищем строку, где элемент диагонали не равен нулю
-            while((m < N) && (fabs(matrix[m][i]) < epsilon)) {
+            while((m < N) && (fabs(matrix[m][k]) < epsilon)) {
                 //Переходим на следующую строку
                 m++; 
             }
 
             //Проверка на выход за пределы массива
             if(m == N) {
-                printf("Система не имеет решения (не возможно найти ненулевой элемент таблицы)");
+                puts("Система не имеет решения (не возможно найти ненулевой элемент таблицы)");
                 matrix_free(matrix, N);
                 free(result);
                 return 1;  //Выход с ошибкой
             }
 
             //меняем строки местами, чтобы избежать деления на 0
-            matrix = row_change(matrix, i, m, N + 1);
+            matrix = row_change(matrix, k, m, N + 1);
         }
 
-        //применяем правило прямоугольника для вычисления новых элементов
-        //работает по формуле
-        for(int j = i + 1; j <= N - 1; j++) {
-            for(int k = i + 1; k <= N; k++) {
-                matrix[j][k] = (matrix[j][k] * matrix[i][i] - matrix[i][k] * matrix[j][i]) / matrix[i][i];   
+        //Исключаем переменную xk из ВСЕХ уравнений, кроме k-го
+        for(int i = 0; i < N; i++) {
+            //Пропускаем текущую строку k (её мы будем нормировать)
+            if(i != k) {
+                //Вычисляем множитель для исключения xk из строки i
+                double multiplier = matrix[i][k] / matrix[k][k];
+                
+                //Преобразуем все элементы строки i, начиная с текущего столбца k
+                for(int j = k; j <= N; j++) {
+                    matrix[i][j] = matrix[i][j] - multiplier * matrix[k][j];
+                }
+                //Явно обнуляем элемент в столбце k (для наглядности)
+                matrix[i][k] = 0.0;
             }
-        } 
-
-        //обнуляем элементы ниже ведущего
-        for(int j = i + 1; j <= N - 1; j++) {
-            matrix[j][i] = 0;
         }
 
-        //деление ведущей строки на ведущий элемент
-        for(int j = N; j >= i; j--) {
-            matrix[i][j] = matrix[i][j] / matrix[i][i];
+        //Нормируем текущую строку k - делаем диагональный элемент равным 1
+        double pivot = matrix[k][k];
+        for(int j = k; j <= N; j++) {
+            matrix[k][j] = matrix[k][j] / pivot;
         }
 
         //вывод результата итераций
-        //увеличиваем счётчик итераций
         count = count + 1;
-        printf("%d-ая итерация: \n", count);
+        printf("%d-ая итерация (обработана переменная x%d): \n", count, k);
         print_matr(matrix, N, N + 1);
     }
 
-    //обратный ход 
-    result[N - 1] = matrix[N - 1][N];
-
-    //цикл для вычисления значения элементов от x0 до x3
-    for(int i = N - 2; i >= 0; i--) {
-        result[i] = matrix[i][N];
-        for(int j = N - 1; j >= i + 1; j-- ) {
-            result[i] = result[i] - matrix[i][j] * result[j];
-        }
-    }
-
-    //вывод результата вычисления
     printf("Результат: \n");
     for(int i = 0; i < N; i++) {
+        result[i] = matrix[i][N];  //Решение берется прямо из последнего столбца
         printf("x%d = %lf\n", i, result[i]);
     }
 
